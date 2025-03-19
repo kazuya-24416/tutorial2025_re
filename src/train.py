@@ -10,11 +10,10 @@ from datasets import Dataset
 from peft import LoraConfig, get_peft_model, prepare_model_for_kbit_training
 from transformers import AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig
 
-with Path("lora_config.yaml").open() as file:
+with Path("config/config.yaml").open() as file:
     config = yaml.safe_load(file)
 
 model_name_or_path = config["model_name_or_path"]
-auth_token = config["auth_token"]
 rank = config["rank"]
 bnb_config = BitsAndBytesConfig(
     load_in_4bit=config["bnb_config"]["load_in_4bit"],
@@ -30,14 +29,11 @@ model = AutoModelForCausalLM.from_pretrained(
     load_in_8bit=True,
     device_map="cuda:0",
     trust_remote_code=True,
-    token=auth_token,
     quantization_config=bnb_config,
 )
 
 tokenizer = AutoTokenizer.from_pretrained(
     model_name_or_path,
-    token=auth_token,
-    # model_max_length=config.get('tokenizer_max_length', 512), # noqa: ERA001
 )
 
 model = prepare_model_for_kbit_training(model)
