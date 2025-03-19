@@ -44,6 +44,16 @@ model = prepare_model_for_kbit_training(model)
 
 
 def find_all_linear_names(model: torch.nn.Module, bits: int) -> list[str]:
+    """Find all linear names in the model.
+
+    Args:
+        model (torch.nn.Module): The model to find linear names in.
+        bits (int): The number of bits to use for the linear names.
+
+    Returns:
+        list[str]: A list of linear names in the model.
+
+    """
     cls = (
         bnb.nn.Linear4bit
         if bits == 4
@@ -58,7 +68,7 @@ def find_all_linear_names(model: torch.nn.Module, bits: int) -> list[str]:
     return list(lora_module_names)
 
 
-target_modules = config["target_modules"]
+target_modules = find_all_linear_names(model, 4)
 
 lora_config = LoraConfig(
     r=rank,
