@@ -172,3 +172,4 @@ data/
 .*.ipynb
 
 .ruff_cache
+output/
