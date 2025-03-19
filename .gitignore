@@ -170,3 +170,5 @@ cython_debug/
 data/
 .langgraph*/
 .*.ipynb
+
+.ruff_cache
