@@ -4,6 +4,28 @@ model_name_or_path: "Qwen/Qwen2.5-0.5B-Instruct"
 # Dataset configuration
 dataset_path: "data/debug_train.jsonl"
 
+# LoRA configuration
+use_lora: true  # Set to false to disable LoRA
+lora_config:
+  r: 16  # LoRA attention dimension
+  lora_alpha: 32  # Alpha parameter for LoRA scaling
+  lora_dropout: 0.05  # Dropout probability for LoRA layers
+  bias: "none"  # Bias type for LoRA
+  task_type: "CAUSAL_LM"  # Task type for LoRA
+  target_modules: ["q_proj", "k_proj", "v_proj", "o_proj"]  # Which modules to apply LoRA to
+
+# Quantization configuration
+use_quantization: true  # Set to false to disable quantization
+quantization_config:
+  bits: 4  # Quantization precision: 4 or 8 bits
+  load_in_4bit: true  # Will be set based on bits value
+  load_in_8bit: false  # Will be set based on bits value
+  llm_int8_threshold: 6.0  # For 8-bit quantization
+  llm_int8_has_fp16_weight: false  # For 8-bit quantization
+  bnb_4bit_compute_dtype: "float16"  # For 4-bit quantization
+  bnb_4bit_use_double_quant: true  # For 4-bit quantization
+  bnb_4bit_quant_type: "nf4"  # For 4-bit quantization
+
 # Training configuration
 training_args:
   output_dir: "./outputs"
