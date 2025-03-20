@@ -172,4 +172,5 @@ data/
 .*.ipynb
 
 .ruff_cache
-output/
+outputs/
+wandb/
