@@ -168,7 +168,7 @@ def convert_to_list_format(input_path: str, output_path: str) -> None:
     converted_data = []
     for _, row in dataset.iterrows():
         # 各instructionとoutputを単一要素のリストに変換
-        converted_row = {"instruction": [row["instruction"]], "output": [row["output"]]}
+        converted_row = {"instruction": row["instruction"], "output": row["output"]}
         converted_data.append(converted_row)
 
     # DataFrameに変換して保存

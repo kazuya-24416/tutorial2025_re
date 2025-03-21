@@ -14,6 +14,7 @@ from transformers import (
 
 import wandb
 from compute_metrics_re import get_compute_metrics_function
+from custom_collator import CustomDataCollatorForSeq2Seq
 from utils import formatting_prompts_func, preprocess_logits_for_metrics, read_jsonlines
 
 # Load configuration from config.yaml
@@ -22,14 +23,17 @@ with Path("config/config.yaml").open() as file:
 
 # Extract configuration values
 model_name_or_path = config["model_name_or_path"]
-dataset_path = config["dataset_path"]
+train_dataset_path = config["train_dataset_path"]
+eval_dataset_path = config["eval_dataset_path"]
 response_template = config["response_template"]
 use_lora = config.get("use_lora", False)
 use_quantization = config.get("use_quantization", False)
 
 # Load dataset
-dataset = read_jsonlines(dataset_path)
-dataset = Dataset.from_pandas(dataset)
+train_dataset = read_jsonlines(train_dataset_path)
+train_dataset = Dataset.from_pandas(train_dataset)
+eval_dataset = read_jsonlines(eval_dataset_path)
+eval_dataset = Dataset.from_pandas(eval_dataset)
 
 # Setup quantization configuration if enabled
 quantization_kwargs = {}
@@ -74,6 +78,9 @@ tokenizer = AutoTokenizer.from_pretrained(model_name_or_path)
 
 # Set padding side to left for decoder-only models (as per warning)
 tokenizer.padding_side = "left"
+if tokenizer.pad_token is None:
+    tokenizer.pad_token = tokenizer.eos_token
+
 
 # Apply LoRA if enabled
 lora_config = None
@@ -100,7 +107,16 @@ if use_lora:
 
 
 # Process dataset to create input_ids and labels
-def preprocess_function(examples):
+def preprocess_function(examples: dict) -> dict:
+    """Preprocess the dataset to create input_ids and labels.
+
+    Args:
+        examples (dict): A dictionary containing the dataset.
+
+    Returns:
+        dict: A dictionary containing the preprocessed dataset.
+
+    """
     formatted_texts = formatting_prompts_func(examples)
 
     # Tokenize the texts
@@ -118,7 +134,7 @@ def preprocess_function(examples):
     # Extract instruction part (everything before the response template)
     instructions = []
     for i in range(len(examples["instruction"])):
-        instruction_text = f"### Instruction: 以下の文章から関係トリプルを抽出してください。\n        関係トリプルは(エンティティ1, 関係, エンティティ2)の形式で出力してください。\n        {examples['instruction'][i]}\n\n### Response:\n"
+        instruction_text = f"### Instruction: 以下の文章から関係トリプルを抽出してください。\n関係トリプルは(エンティティ1, 関係, エンティティ2)の形式で出力してください。\n{examples['instruction'][i]}\n\n### Response:\n"
         instructions.append(instruction_text)
 
     # Store the instruction-only text for generation during evaluation
@@ -128,77 +144,13 @@ def preprocess_function(examples):
 
 
 # Apply preprocessing to dataset
-processed_dataset = dataset.map(
-    preprocess_function, batched=True, remove_columns=dataset.column_names
+train_dataset = train_dataset.map(
+    preprocess_function, batched=True, remove_columns=train_dataset.column_names
 )
 
-
-# Define a custom data collator that masks the instruction part with -100
-class CustomDataCollatorForSeq2Seq:
-    def __init__(
-        self, tokenizer, model, response_template, padding="max_length", max_length=512
-    ):
-        self.tokenizer = tokenizer
-        self.model = model
-        self.padding = padding
-        self.max_length = max_length
-        self.response_template = response_template
-        # Tokenize the response template to find its start in the sequence
-        self.response_token_ids = tokenizer.encode(
-            response_template, add_special_tokens=False
-        )
-
-    def __call__(self, features):
-        # Tokenizer's default collation
-        batch = {}
-
-        # Handling input_ids and attention_mask
-        input_ids = [feature["input_ids"] for feature in features]
-        attention_mask = [feature["attention_mask"] for feature in features]
-
-        # Pad input_ids and attention_mask
-        if self.padding == "max_length":
-            input_ids = [
-                ids + [self.tokenizer.pad_token_id] * (self.max_length - len(ids))
-                if len(ids) < self.max_length
-                else ids[: self.max_length]
-                for ids in input_ids
-            ]
-            attention_mask = [
-                mask + [0] * (self.max_length - len(mask))
-                if len(mask) < self.max_length
-                else mask[: self.max_length]
-                for mask in attention_mask
-            ]
-
-        batch["input_ids"] = torch.tensor(input_ids)
-        batch["attention_mask"] = torch.tensor(attention_mask)
-
-        # Create labels with -100 for instruction part
-        labels = []
-        for feature_input_ids in input_ids:
-            label = feature_input_ids.copy()
-
-            # Find the position of response_template in the sequence
-            response_start_idx = -1
-            for i in range(len(label) - len(self.response_token_ids) + 1):
-                if (
-                    label[i : i + len(self.response_token_ids)]
-                    == self.response_token_ids
-                ):
-                    response_start_idx = i
-                    break
-
-            # If response template is found, mask everything before it with -100
-            if response_start_idx != -1:
-                label[:response_start_idx] = [-100] * response_start_idx
-
-            labels.append(label)
-
-        batch["labels"] = torch.tensor(labels)
-
-        return batch
-
+eval_dataset = eval_dataset.map(
+    preprocess_function, batched=True, remove_columns=eval_dataset.column_names
+)
 
 # Create custom data collator that masks instruction part
 data_collator = CustomDataCollatorForSeq2Seq(
@@ -245,87 +197,19 @@ else:
         mode="disabled" if wandb_config.get("debug", False) else "online",
     )
 
-# Add generation-specific parameters for Seq2SeqTrainer
-training_args["predict_with_generate"] = True
-# Set generation parameters correctly
-training_args["generation_max_length"] = 768  # Input length (512) + some extra tokens
-training_args["generation_num_beams"] = 4
-
-# Remove parameters not supported by Seq2SeqTrainingArguments
-if "max_seq_length" in training_args:
-    del training_args["max_seq_length"]
-
 # Create Seq2SeqTrainingArguments
 args = Seq2SeqTrainingArguments(**training_args)
 
-
-# Create a custom Seq2SeqTrainer that uses instruction-only inputs during evaluation
-class CustomSeq2SeqTrainer(Seq2SeqTrainer):
-    def prediction_step(self, model, inputs, prediction_loss_only, ignore_keys=None):
-        """Override to use instruction-only inputs during generation."""
-        if self.args.predict_with_generate and not prediction_loss_only:
-            # For generation, we want to use the instruction-only inputs
-            # Get the batch size
-            batch_size = inputs["input_ids"].shape[0]
-
-            # Get instruction texts from the dataset
-            instruction_texts = []
-            for i in range(batch_size):
-                # Find the index in the dataset
-                idx = inputs.get("idx", torch.tensor(list(range(batch_size))))[i].item()
-                if idx < len(self.eval_dataset):
-                    instruction_text = self.eval_dataset[idx].get(
-                        "instruction_text", ""
-                    )
-                    instruction_texts.append(instruction_text)
-                else:
-                    # Fallback if index is out of range
-                    instruction_texts.append("")
-
-            # Tokenize instruction texts
-            if instruction_texts:
-                instruction_inputs = self.tokenizer(
-                    instruction_texts,
-                    padding="max_length",
-                    truncation=True,
-                    max_length=512,
-                    return_tensors="pt",
-                ).to(inputs["input_ids"].device)
-
-                # Replace the input_ids with instruction-only input_ids for generation
-                generation_inputs = {"input_ids": instruction_inputs["input_ids"]}
-                if "attention_mask" in instruction_inputs:
-                    generation_inputs["attention_mask"] = instruction_inputs[
-                        "attention_mask"
-                    ]
-
-                return super().prediction_step(
-                    model,
-                    generation_inputs,
-                    prediction_loss_only,
-                    ignore_keys=ignore_keys,
-                )
-
-        # For loss calculation, use the original inputs
-        return super().prediction_step(
-            model, inputs, prediction_loss_only, ignore_keys=ignore_keys
-        )
-
-
 # Create custom Seq2SeqTrainer
-trainer = CustomSeq2SeqTrainer(
+trainer = Seq2SeqTrainer(
     model=model,
     args=args,
-    train_dataset=processed_dataset,
-    eval_dataset=processed_dataset,
+    train_dataset=train_dataset,
+    eval_dataset=eval_dataset,
     data_collator=data_collator,
     compute_metrics=compute_metrics,
-    preprocess_logits_for_metrics=preprocess_logits_for_metrics,
     processing_class=tokenizer,
 )
 
 # Start training
 trainer.train()
-
-# Save the final model
-trainer.save_model(log_dir + "/final_model")

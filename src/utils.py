@@ -3,6 +3,11 @@ from pathlib import Path
 
 import pandas as pd
 import torch
+import yaml
+
+# Load configuration from config.yaml
+with Path("config/config.yaml").open() as file:
+    config = yaml.safe_load(file)
 
 
 # Load dataset
@@ -38,13 +43,14 @@ def formatting_prompts_func(example: dict) -> list:
         text = f"""### Human:\n 以下の文章から関係トリプルを抽出してください。
         関係トリプルは(エンティティ1, 関係, エンティティ2)の形式で出力してください。
         {example["instruction"][i]}
-        \n\n### Response:\n {example["output"][i]}"""
+        \n\n{config["response_template"]} {example["output"][i]}"""
         output_texts.append(text)
     return output_texts
 
 
 def preprocess_logits_for_metrics(
-    logits: torch.Tensor, labels: torch.Tensor
+    logits: torch.Tensor,
+    labels: torch.Tensor,  # noqa: ARG001
 ) -> torch.Tensor:
     """Original Trainer may have a memory leak.
 

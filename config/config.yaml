@@ -1,5 +1,6 @@
 # Model configuration
 model_name_or_path: "Qwen/Qwen2.5-0.5B-Instruct"
+# model_name_or_path: "llm-jp/llm-jp-3-1.8b-instruct2"
 
 # Dataset configuration
 train_dataset_path: "data/debug_train.jsonl"
@@ -13,7 +14,7 @@ lora_config:
   lora_dropout: 0.05  # Dropout probability for LoRA layers
   bias: "none"  # Bias type for LoRA
   task_type: "CAUSAL_LM"  # Task type for LoRA
-  target_modules: ["q_proj", "k_proj", "v_proj", "o_proj"]  # Which modules to apply LoRA to
+  target_modules: ["q_proj", "k_proj", "v_proj", "o_proj", "up_proj", "down_proj", "gate_proj"]  # Which modules to apply LoRA to
 
 # Quantization configuration
 use_quantization: true  # Set to false to disable quantization
@@ -31,8 +32,8 @@ quantization_config:
 training_args:
   output_dir: "./outputs"
   eval_strategy: "epoch"
-  per_device_train_batch_size: 16
-  per_device_eval_batch_size: 16
+  per_device_train_batch_size: 8
+  per_device_eval_batch_size: 10
   learning_rate: 1.0e-5
   num_train_epochs: 100.0
   lr_scheduler_type: "linear"
@@ -40,11 +41,14 @@ training_args:
   logging_strategy: "epoch"
   save_strategy: "epoch"
   report_to: "all"
-  max_seq_length: 512
+  # max_seq_length: 512
   gradient_accumulation_steps: 1
   gradient_checkpointing: true
   gradient_checkpointing_kwargs:
     use_reentrant: false
+  predict_with_generate: true
+  generation_max_length: 768
+  generation_num_beams: 4
 
 
 # Wandb configuration

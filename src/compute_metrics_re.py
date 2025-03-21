@@ -25,7 +25,12 @@ def save_dir(preds: list, refs: list, log_dir: str) -> None:
     """
     with Path(log_dir + "/preds.json").open("w", encoding="utf-8") as f:
         for pred, ref in zip(preds, refs, strict=False):
-            json.dump({"pred": pred, "ref": ref}, f, ensure_ascii=False, indent=4)
+            json.dump(
+                {"pred": pred, "ref": ref},
+                f,
+                ensure_ascii=False,
+                indent=4,
+            )
             f.write("\n")
 
 
@@ -44,25 +49,26 @@ def get_compute_metrics_function(tokenizer: AutoTokenizer, log_dir: str) -> Call
 
     def compute_metrics(eval_pred: EvalPrediction) -> dict[str, float]:
         # Get predictions and references
-        predictions = eval_pred.predictions
-        references = eval_pred.label_ids
+        predictions, references = eval_pred
 
         predictions = np.where(predictions != -100, predictions, tokenizer.pad_token_id)
         references = np.where(references != -100, references, tokenizer.pad_token_id)
 
         # Decode predictions and references
-        # tokenizer.pad_token = tokenizer.eos_token
         decoded_preds = tokenizer.batch_decode(
             predictions, skip_special_tokens=True, clean_up_tokenization_spaces=True
         )
         decoded_refs = tokenizer.batch_decode(
             references, skip_special_tokens=True, clean_up_tokenization_spaces=True
         )
-        for pred, ref in zip(decoded_preds, decoded_refs, strict=False):
-            print(pred)
-            print("---")
-            print(ref)
-            print("\n")
+        # Remove response template from decoded predictions
+        decoded_preds = [
+            decoded_pred.split(config["response_template"])[1].strip()
+            for decoded_pred in decoded_preds
+        ]
+
+        print("decoded_preds", decoded_preds)
+        print("decoded_refs", decoded_refs)
 
         save_dir(decoded_preds, decoded_refs, log_dir)
 
@@ -70,31 +76,31 @@ def get_compute_metrics_function(tokenizer: AutoTokenizer, log_dir: str) -> Call
         pred_triples_list = []
         ref_triples_list = []
 
-        for pred, _ in zip(decoded_preds, decoded_refs, strict=False):
-            # Extract triples from prediction text
+        for pred, ref in zip(decoded_preds, decoded_refs, strict=False):
             pred_triples = set()
+            ref_triples = set()
             pred_lines = pred.strip().split("\n")
-            for line in pred_lines:
+            ref_lines = ref.strip().split("\n")
+            for pred_line, ref_line in zip(pred_lines, ref_lines, strict=False):
                 # Extract triples in format (entity1, relation, entity2)
-                triple_match = re.match(r"\((.+?), (.+?), (.+?)\)", line.strip())
-                if triple_match:
-                    entity1, relation, entity2 = triple_match.groups()
+                pred_triple_match = re.match(
+                    r"\((.+?), (.+?), (.+?)\)", pred_line.strip()
+                )
+                if pred_triple_match:
+                    entity1, relation, entity2 = pred_triple_match.groups()
                     pred_triples.add(
                         (entity1.strip(), relation.strip(), entity2.strip())
                     )
-            pred_triples_list.append(pred_triples)
-
-        # Extract triples from reference text
-        for ref in decoded_refs:
-            ref_triples = set()
-            ref_lines = ref.strip().split("\n")
-            for line in ref_lines:
-                triple_match = re.match(r"\((.+?), (.+?), (.+?)\)", line.strip())
-                if triple_match:
-                    entity1, relation, entity2 = triple_match.groups()
+                ref_triple_match = re.match(
+                    r"\((.+?), (.+?), (.+?)\)", ref_line.strip()
+                )
+                if ref_triple_match:
+                    entity1, relation, entity2 = ref_triple_match.groups()
                     ref_triples.add(
                         (entity1.strip(), relation.strip(), entity2.strip())
                     )
+
+            pred_triples_list.append(pred_triples)
             ref_triples_list.append(ref_triples)
 
         # Calculate precision, recall, and F1 score
