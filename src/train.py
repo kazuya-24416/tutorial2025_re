@@ -9,11 +9,12 @@ from transformers import (
     AutoTokenizer,
     BitsAndBytesConfig,
 )
-from trl import DataCollatorForCompletionOnlyLM, SFTConfig, SFTTrainer
+from trl import DataCollatorForCompletionOnlyLM, SFTConfig
 
 import wandb
 from compute_metrics_re import get_compute_metrics_function
-from utils import formatting_prompts_func, preprocess_logits_for_metrics, read_jsonlines
+from custom_trainer import CustomSFTTrainer, GenerateEvaluationCallback
+from utils import formatting_prompts_func, read_jsonlines
 
 # Load configuration from config.yaml
 with Path("config/config.yaml").open() as file:
@@ -99,9 +100,7 @@ if use_lora:
 collator = DataCollatorForCompletionOnlyLM(response_template, tokenizer=tokenizer)
 
 # eval
-hprams_name = f"""
-    lr{config["training_args"]["learning_rate"]}_bs{config["training_args"]["per_device_train_batch_size"]}
-    """
+hprams_name = f"lr{config['training_args']['learning_rate']}_bs{config['training_args']['per_device_train_batch_size']}"
 log_dir = config["training_args"]["output_dir"] + f"/{hprams_name}"
 Path(log_dir).mkdir(parents=True, exist_ok=True)
 compute_metrics = get_compute_metrics_function(tokenizer, log_dir)
@@ -138,11 +137,12 @@ else:
         mode="disabled" if wandb_config.get("debug", False) else "online",
     )
 
+
 # Create SFTConfig from training arguments
 args = SFTConfig(**training_args)
 
 # Create SFT trainer
-trainer = SFTTrainer(
+trainer = CustomSFTTrainer(
     model,
     train_dataset=train_dataset,
     eval_dataset=eval_dataset,
@@ -150,9 +150,18 @@ trainer = SFTTrainer(
     formatting_func=formatting_prompts_func,
     data_collator=collator,
     peft_config=lora_config if use_lora else None,
-    compute_metrics=compute_metrics,
-    preprocess_logits_for_metrics=preprocess_logits_for_metrics,
 )
+
+# Add custom callback
+trainer.add_callback(
+    GenerateEvaluationCallback(
+        eval_dataset=eval_dataset,
+        tokenizer=tokenizer,
+        compute_metrics_fn=compute_metrics,
+        generate_kwargs={"max_new_tokens": 128, "num_beams": 1},
+    )
+)
+
 
 # Start training
 trainer.train()
