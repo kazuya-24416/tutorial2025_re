@@ -1,9 +1,11 @@
 import json
 import re
+from pathlib import Path
 
 
-def add_spans_to_jsonl(input_file, output_file):
+def add_spans_to_jsonl(input_file: str, output_file: str) -> None:
     """JSONLinesファイルのne_listにspanアノテーションをリスト形式で追加する.
+
     - 同じエンティティが複数回登場する場合、start/endリストに全ての出現位置を記録
     - 部分一致の問題を回避するため、単語境界を考慮する
 
@@ -14,7 +16,7 @@ def add_spans_to_jsonl(input_file, output_file):
     """
     processed_lines = []
 
-    with open(input_file, encoding="utf-8") as f:
+    with Path(input_file).open(encoding="utf-8") as f:
         for line in f:
             example = json.loads(line.strip())
             text = example["text"]
@@ -101,8 +103,8 @@ def add_spans_to_jsonl(input_file, output_file):
     )
 
 
-def is_japanese_char(char):
-    """文字が日本語（ひらがな、カタカナ、漢字）かどうかをチェック"""
+def is_japanese_char(char: str) -> bool:
+    """文字が日本語（ひらがな、カタカナ、漢字）かどうかをチェック."""
     if not char:
         return False
     # ひらがな、カタカナ、漢字の文字コード範囲
