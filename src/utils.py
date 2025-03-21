@@ -2,6 +2,7 @@ import json
 from pathlib import Path
 
 import pandas as pd
+import torch
 
 
 # Load dataset
@@ -33,8 +34,26 @@ def formatting_prompts_func(example: dict) -> list:
     """
     output_texts = []
     for i in range(len(example["instruction"])):
-        text = f"""
-        ### Instruction: {example["instruction"][i]}\n
-        ### Answer: {example["output"][i]}"""
+        # Format the prompt in a way that's consistent with the model's expected format
+        text = f"""### Human:\n 以下の文章から関係トリプルを抽出してください。
+        関係トリプルは(エンティティ1, 関係, エンティティ2)の形式で出力してください。
+        {example["instruction"][i]}
+        \n\n### Response:\n {example["output"][i]}"""
         output_texts.append(text)
     return output_texts
+
+
+def preprocess_logits_for_metrics(
+    logits: torch.Tensor, labels: torch.Tensor
+) -> torch.Tensor:
+    """Original Trainer may have a memory leak.
+
+    Args:
+        logits (torch.Tensor): Logits from the model.
+        labels (torch.Tensor): True labels.
+
+    Returns:
+        torch.Tensor: Predicted IDs.
+
+    """
+    return torch.argmax(logits, dim=-1)

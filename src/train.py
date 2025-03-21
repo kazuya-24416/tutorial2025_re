@@ -4,10 +4,16 @@ import torch
 import yaml
 from datasets import Dataset
 from peft import LoraConfig, get_peft_model, prepare_model_for_kbit_training
-from transformers import AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig
+from transformers import (
+    AutoModelForCausalLM,
+    AutoTokenizer,
+    BitsAndBytesConfig,
+)
 from trl import DataCollatorForCompletionOnlyLM, SFTConfig, SFTTrainer
 
-from utils import formatting_prompts_func, read_jsonlines
+import wandb
+from compute_metrics_re import get_compute_metrics_function
+from utils import formatting_prompts_func, preprocess_logits_for_metrics, read_jsonlines
 
 # Load configuration from config.yaml
 with Path("config/config.yaml").open() as file:
@@ -15,13 +21,17 @@ with Path("config/config.yaml").open() as file:
 
 # Extract configuration values
 model_name_or_path = config["model_name_or_path"]
-dataset_path = config["dataset_path"]
+train_dataset_path = config["train_dataset_path"]
+eval_dataset_path = config["eval_dataset_path"]
 response_template = config["response_template"]
 use_lora = config.get("use_lora", False)
 use_quantization = config.get("use_quantization", False)
 
-dataset = read_jsonlines(dataset_path)
-dataset = Dataset.from_pandas(dataset)
+train_dataset = read_jsonlines(train_dataset_path)
+train_dataset = Dataset.from_pandas(train_dataset)
+
+eval_dataset = read_jsonlines(eval_dataset_path)
+eval_dataset = Dataset.from_pandas(eval_dataset)
 
 # Setup quantization configuration if enabled
 quantization_kwargs = {}
@@ -88,19 +98,60 @@ if use_lora:
 # Create data collator with response template from config
 collator = DataCollatorForCompletionOnlyLM(response_template, tokenizer=tokenizer)
 
-# Create SFTConfig from training arguments in config
+# eval
+hprams_name = f"""
+    lr{config["training_args"]["learning_rate"]}_bs{config["training_args"]["per_device_train_batch_size"]}
+    """
+log_dir = config["training_args"]["output_dir"] + f"/{hprams_name}"
+Path(log_dir).mkdir(parents=True, exist_ok=True)
+compute_metrics = get_compute_metrics_function(tokenizer, log_dir)
+
+# Get training arguments from config
 training_args = config["training_args"]
+
+# Configure Weights & Biases
+wandb_config = config.get("wandb", {})
+wandb_enabled = wandb_config.get("enabled", True)
+
+# Update report_to based on wandb configuration
+if not wandb_enabled:
+    # Disable wandb during debugging
+    if "report_to" in training_args and "wandb" in training_args["report_to"]:
+        if training_args["report_to"] == "wandb":
+            training_args["report_to"] = "none"
+        elif training_args["report_to"] == "all":
+            training_args["report_to"] = ["tensorboard"]
+        elif (
+            isinstance(training_args["report_to"], list)
+            and "wandb" in training_args["report_to"]
+        ):
+            training_args["report_to"] = [
+                r for r in training_args["report_to"] if r != "wandb"
+            ]
+else:
+    # Initialize wandb with project settings
+    wandb.init(
+        project=wandb_config.get("project", "tutorial2025_re"),
+        name=wandb_config.get("name", None),
+        group=wandb_config.get("group", None),
+        tags=wandb_config.get("tags", []),
+        mode="disabled" if wandb_config.get("debug", False) else "online",
+    )
+
+# Create SFTConfig from training arguments
 args = SFTConfig(**training_args)
 
 # Create SFT trainer
 trainer = SFTTrainer(
     model,
-    train_dataset=dataset,
-    eval_dataset=dataset,
+    train_dataset=train_dataset,
+    eval_dataset=eval_dataset,
     args=args,
     formatting_func=formatting_prompts_func,
     data_collator=collator,
     peft_config=lora_config if use_lora else None,
+    compute_metrics=compute_metrics,
+    preprocess_logits_for_metrics=preprocess_logits_for_metrics,
 )
 
 # Start training
