@@ -145,7 +145,7 @@ def preprocess_function(examples: dict) -> dict:
     # Extract instruction part (everything before the response template)
     instructions = []
     for i in range(len(examples["instruction"])):
-        instruction_text = f"### 指示: 以下の文章から関係トリプルを抽出してください。\n関係トリプルは(エンティティ1, 関係, エンティティ2)の形式で出力してください。\n{examples['instruction'][i]}\n\n{config['response_template']}"
+        instruction_text = f"### 指示: 以下の文章から関係トリプルを抽出してください。\n関係トリプルは(エンティティ1, 関係, エンティティ2)の形式で出力してください。\n{examples['instruction'][i]}\n\n{config['response_template']}" # noqa: E501
         instructions.append(instruction_text)
 
     # Store the instruction-only text for generation during evaluation
@@ -218,10 +218,10 @@ class EpochLoggerCallback(TrainerCallback):
 
     def on_evaluate(
         self,
-        args: Seq2SeqTrainingArguments,
+        args: Seq2SeqTrainingArguments, # noqa: ARG002
         state: TrainerState,
-        control: TrainerControl,
-        **kwargs,
+        control: TrainerControl, # noqa: ARG002
+        **kwargs, # noqa: ARG002, ANN003
     ) -> None:
         """on_evaluate callback.
 
@@ -237,12 +237,12 @@ class EpochLoggerCallback(TrainerCallback):
 
 
 # Set up logging directory
-hprams_name = f"""lr{config["training_args"]["learning_rate"]}_bs{config["training_args"]["per_device_train_batch_size"]}"""
+hprams_name = f"""lr{config["training_args"]["learning_rate"]}_bs{config["training_args"]["per_device_train_batch_size"]}""" # noqa: E501
 log_dir = config["training_args"]["output_dir"] + f"/{hprams_name}"
 Path(log_dir).mkdir(parents=True, exist_ok=True)
 
 
-def create_compute_metrics_function(tokenizer: AutoTokenizer, log_dir: str):
+def create_compute_metrics_function(tokenizer: AutoTokenizer, log_dir: str)-> callable: # noqa: ARG001
     """Create compute metrics function.
 
     Args:
