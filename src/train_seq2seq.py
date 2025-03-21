@@ -8,14 +8,19 @@ from transformers import (
     AutoModelForCausalLM,
     AutoTokenizer,
     BitsAndBytesConfig,
+    EarlyStoppingCallback,
+    EvalPrediction,
     Seq2SeqTrainer,
     Seq2SeqTrainingArguments,
+    TrainerCallback,
+    TrainerControl,
+    TrainerState,
 )
 
 import wandb
-from compute_metrics_re import get_compute_metrics_function
+from compute_metrics_re import compute_metrics
 from custom_collator import CustomDataCollatorForSeq2Seq
-from utils import formatting_prompts_func, preprocess_logits_for_metrics, read_jsonlines
+from utils import formatting_prompts_func, read_jsonlines
 
 # Load configuration from config.yaml
 with Path("config/config.yaml").open() as file:
@@ -34,6 +39,12 @@ train_dataset = read_jsonlines(train_dataset_path)
 train_dataset = Dataset.from_pandas(train_dataset)
 eval_dataset = read_jsonlines(eval_dataset_path)
 eval_dataset = Dataset.from_pandas(eval_dataset)
+
+# Get early stopping parameters from config
+early_stopping_enabled = config.get("early_stopping", {}).get("enabled", False)
+early_stopping_patience = config.get("early_stopping", {}).get("patience", 3)
+early_stopping_threshold = config.get("early_stopping", {}).get("threshold", 0.0)
+early_stopping_metric = config.get("early_stopping", {}).get("metric", "eval_f1")
 
 # Setup quantization configuration if enabled
 quantization_kwargs = {}
@@ -134,7 +145,7 @@ def preprocess_function(examples: dict) -> dict:
     # Extract instruction part (everything before the response template)
     instructions = []
     for i in range(len(examples["instruction"])):
-        instruction_text = f"### Instruction: 以下の文章から関係トリプルを抽出してください。\n関係トリプルは(エンティティ1, 関係, エンティティ2)の形式で出力してください。\n{examples['instruction'][i]}\n\n### Response:\n"
+        instruction_text = f"### 指示: 以下の文章から関係トリプルを抽出してください。\n関係トリプルは(エンティティ1, 関係, エンティティ2)の形式で出力してください。\n{examples['instruction'][i]}\n\n{config['response_template']}"
         instructions.append(instruction_text)
 
     # Store the instruction-only text for generation during evaluation
@@ -160,12 +171,6 @@ data_collator = CustomDataCollatorForSeq2Seq(
     padding="max_length",
     max_length=512,
 )
-
-# Set up logging directory
-hprams_name = f"""lr{config["training_args"]["learning_rate"]}_bs{config["training_args"]["per_device_train_batch_size"]}"""
-log_dir = config["training_args"]["output_dir"] + f"/{hprams_name}"
-Path(log_dir).mkdir(parents=True, exist_ok=True)
-compute_metrics = get_compute_metrics_function(tokenizer, log_dir)
 
 # Configure Weights & Biases
 wandb_config = config.get("wandb", {})
@@ -197,6 +202,66 @@ else:
         mode="disabled" if wandb_config.get("debug", False) else "online",
     )
 
+
+# カスタムコールバックでエポック情報を取得
+class EpochLoggerCallback(TrainerCallback):
+    """Custom callback to log epoch information."""
+
+    def __init__(self, trainer: Seq2SeqTrainer) -> None:
+        """Init.
+
+        Args:
+        trainer (Seq2SeqTrainer): Trainer instance.
+
+        """
+        self.trainer = trainer
+
+    def on_evaluate(
+        self,
+        args: Seq2SeqTrainingArguments,
+        state: TrainerState,
+        control: TrainerControl,
+        **kwargs,
+    ) -> None:
+        """on_evaluate callback.
+
+        Args:
+        args (Seq2SeqTrainingArguments): Training arguments.
+        state (TrainerState): Trainer state.
+        control (TrainerControl): Trainer control.
+        **kwargs: Additional keyword arguments.
+
+        """
+        # エポック情報を更新
+        self.trainer.compute_metrics_epoch = state.epoch
+
+
+# Set up logging directory
+hprams_name = f"""lr{config["training_args"]["learning_rate"]}_bs{config["training_args"]["per_device_train_batch_size"]}"""
+log_dir = config["training_args"]["output_dir"] + f"/{hprams_name}"
+Path(log_dir).mkdir(parents=True, exist_ok=True)
+
+
+def create_compute_metrics_function(tokenizer: AutoTokenizer, log_dir: str):
+    """Create compute metrics function.
+
+    Args:
+        tokenizer (AutoTokenizer): Tokenizer for decoding.
+        log_dir (str): Directory to save predictions and references.
+        callback (TrainerCallback): Callback to get epoch information.
+
+    Returns:
+        callable: Compute metrics function.
+
+    """
+
+    def call_compute_metrics(eval_pred: EvalPrediction) -> dict[str, float]:
+        epoch = getattr(trainer, "compute_metrics_epoch", 0)
+        return compute_metrics(eval_pred, log_dir, int(epoch) + 1)
+
+    return call_compute_metrics
+
+
 # Create Seq2SeqTrainingArguments
 args = Seq2SeqTrainingArguments(**training_args)
 
@@ -207,9 +272,20 @@ trainer = Seq2SeqTrainer(
     train_dataset=train_dataset,
     eval_dataset=eval_dataset,
     data_collator=data_collator,
-    compute_metrics=compute_metrics,
+    compute_metrics=create_compute_metrics_function(tokenizer, log_dir),
     processing_class=tokenizer,
 )
+
+# Add custom callback
+trainer.add_callback(EpochLoggerCallback(trainer))
+# Add early stopping callback if enabled
+if early_stopping_enabled:
+    trainer.add_callback(
+        EarlyStoppingCallback(
+            early_stopping_patience=early_stopping_patience,
+            early_stopping_threshold=early_stopping_threshold,
+        )
+    )
 
 # Start training
 trainer.train()
