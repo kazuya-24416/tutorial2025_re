@@ -145,7 +145,9 @@ def preprocess_function(examples: dict) -> dict:
     # Extract instruction part (everything before the response template)
     instructions = []
     for i in range(len(examples["instruction"])):
-        instruction_text = f"{examples['instruction'][i]}\n\n{config['response_template']}" # noqa: E501
+        instruction_text = (
+            f"{examples['instruction'][i]}\n\n{config['response_template']}"
+        )
         instructions.append(instruction_text)
 
     # Store the instruction-only text for generation during evaluation
@@ -218,10 +220,10 @@ class EpochLoggerCallback(TrainerCallback):
 
     def on_evaluate(
         self,
-        args: Seq2SeqTrainingArguments, # noqa: ARG002
+        args: Seq2SeqTrainingArguments,  # noqa: ARG002
         state: TrainerState,
-        control: TrainerControl, # noqa: ARG002
-        **kwargs, # noqa: ARG002, ANN003
+        control: TrainerControl,  # noqa: ARG002
+        **kwargs,  # noqa: ARG002, ANN003
     ) -> None:
         """on_evaluate callback.
 
@@ -237,12 +239,12 @@ class EpochLoggerCallback(TrainerCallback):
 
 
 # Set up logging directory
-hprams_name = f"""lr{config["training_args"]["learning_rate"]}_bs{config["training_args"]["per_device_train_batch_size"]}""" # noqa: E501
+hprams_name = f"""lr{config["training_args"]["learning_rate"]}_bs{config["training_args"]["per_device_train_batch_size"]}"""  # noqa: E501
 log_dir = config["training_args"]["output_dir"] + f"/{hprams_name}"
 Path(log_dir).mkdir(parents=True, exist_ok=True)
 
 
-def create_compute_metrics_function(tokenizer: AutoTokenizer, log_dir: str)-> callable: # noqa: ARG001
+def create_compute_metrics_function(tokenizer: AutoTokenizer, log_dir: str) -> callable:  # noqa: ARG001
     """Create compute metrics function.
 
     Args:
@@ -262,12 +264,33 @@ def create_compute_metrics_function(tokenizer: AutoTokenizer, log_dir: str)-> ca
     return call_compute_metrics
 
 
+# Create a model initialization function for hyperparameter search
+def model_init():
+    """Initialize a new model for each trial."""
+    model_config = AutoModelForCausalLM.from_pretrained(
+        model_name_or_path,
+        torch_dtype=torch.float16,
+        device_map="auto",
+        **quantization_kwargs,
+    )
+
+    if use_lora:
+        if use_quantization:
+            model_config = prepare_model_for_kbit_training(model_config)
+
+        lora_model = get_peft_model(model_config, lora_config)
+        return lora_model
+
+    return model_config
+
+
 # Create Seq2SeqTrainingArguments
 args = Seq2SeqTrainingArguments(**training_args)
 
 # Create custom Seq2SeqTrainer
 trainer = Seq2SeqTrainer(
-    model=model,
+    model=None,
+    model_init=model_init,
     args=args,
     train_dataset=train_dataset,
     eval_dataset=eval_dataset,
@@ -287,5 +310,49 @@ if early_stopping_enabled:
         )
     )
 
+
+# Define hyperparameter search space
+def hp_space(_):
+    """Define the hyperparameter search space for wandb."""
+    return {
+        "method": "random",  # random search
+        "metric": {
+            "name": "eval_f1",  # 最適化する評価指標
+            "goal": "maximize",  # 最大化を目指す
+        },
+        "parameters": {
+            "learning_rate": {
+                "distribution": "log_uniform_values",
+                "min": 1e-6,
+                "max": 1e-4,
+            },
+            "per_device_train_batch_size": {"values": [4, 8, 16]},
+            "num_train_epochs": {"value": config["training_args"]["num_train_epochs"]},
+        },
+    }
+
+
+# Run hyperparameter search
+best_trial = trainer.hyperparameter_search(
+    direction="maximize",
+    backend="wandb",  # Use wandb as backend
+    hp_space=hp_space,
+    n_trials=6,  # Number of trials to run
+    compute_objective=lambda metrics: metrics.get(
+        "eval_f1", 0.0
+    ),  # Objective function to maximize
+)
+
+print(f"Best trial: {best_trial}")
+print(f"Best hyperparameters: {best_trial.hyperparameters}")
+
+# Train with best hyperparameters
+best_hyperparameters = best_trial.hyperparameters
+for param, value in best_hyperparameters.items():
+    setattr(trainer.args, param, value)
+
+# Update logging directory with best hyperparameters
+log_dir = config["training_args"]["output_dir"]
+Path(log_dir).mkdir(parents=True, exist_ok=True)
 # Start training
 trainer.train()
