@@ -3,8 +3,8 @@ model_name_or_path: "Qwen/Qwen2.5-0.5B-Instruct"
 # model_name_or_path: "llm-jp/llm-jp-3-1.8b-instruct2"
 
 # Dataset configuration
-train_dataset_path: "data/debug_train.jsonl"
-eval_dataset_path: "data/debug_eval.jsonl"
+train_dataset_path: "data/train_genia_ner.jsonl"
+eval_dataset_path: "data/dev_genia_ner.jsonl"
 
 # LoRA configuration
 use_lora: true  # Set to false to disable LoRA
@@ -30,12 +30,12 @@ quantization_config:
 
 # Training configuration
 training_args:
-  output_dir: "./outputs"
+  output_dir: "genia_ner_output"
   eval_strategy: "epoch"
   per_device_train_batch_size: 8
   per_device_eval_batch_size: 10
   learning_rate: 1.0e-5
-  num_train_epochs: 100.0
+  num_train_epochs: 30.0
   lr_scheduler_type: "linear"
   warmup_ratio: 0.0
   logging_strategy: "epoch"
@@ -69,4 +69,4 @@ wandb:
   debug: false  # Set to true for wandb debug mode
 
 # Response template for data collator
-response_template: "### 指示:\n"
+response_template: "####"

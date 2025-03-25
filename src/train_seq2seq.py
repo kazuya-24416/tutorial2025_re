@@ -18,7 +18,7 @@ from transformers import (
 )
 
 import wandb
-from compute_metrics_re import compute_metrics
+from compute_metrics_genia11_ner import compute_metrics
 from custom_collator import CustomDataCollatorForSeq2Seq
 from utils import formatting_prompts_func, read_jsonlines
 
@@ -145,7 +145,7 @@ def preprocess_function(examples: dict) -> dict:
     # Extract instruction part (everything before the response template)
     instructions = []
     for i in range(len(examples["instruction"])):
-        instruction_text = f"### 指示: 以下の文章から関係トリプルを抽出してください。\n関係トリプルは(エンティティ1, 関係, エンティティ2)の形式で出力してください。\n{examples['instruction'][i]}\n\n{config['response_template']}" # noqa: E501
+        instruction_text = f"{examples['instruction'][i]}\n\n{config['response_template']}" # noqa: E501
         instructions.append(instruction_text)
 
     # Store the instruction-only text for generation during evaluation
