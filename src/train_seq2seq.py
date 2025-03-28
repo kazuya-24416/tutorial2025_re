@@ -3,6 +3,7 @@ from pathlib import Path
 import torch
 import yaml
 from datasets import Dataset
+from huggingface_hub import login
 from peft import LoraConfig, get_peft_model, prepare_model_for_kbit_training
 from transformers import (
     AutoModelForCausalLM,
@@ -21,6 +22,8 @@ import wandb
 from compute_metrics_genia11_ner import compute_metrics
 from custom_collator import CustomDataCollatorForSeq2Seq
 from utils import formatting_prompts_func, read_jsonlines
+
+login("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")  # トークンを設定
 
 # Load configuration from config.yaml
 with Path("config/config.yaml").open() as file:
@@ -145,7 +148,9 @@ def preprocess_function(examples: dict) -> dict:
     # Extract instruction part (everything before the response template)
     instructions = []
     for i in range(len(examples["instruction"])):
-        instruction_text = f"{examples['instruction'][i]}\n\n{config['response_template']}" # noqa: E501
+        instruction_text = (
+            f"{examples['instruction'][i]}\n\n{config['response_template']}"  # noqa: E501
+        )
         instructions.append(instruction_text)
 
     # Store the instruction-only text for generation during evaluation
@@ -218,10 +223,10 @@ class EpochLoggerCallback(TrainerCallback):
 
     def on_evaluate(
         self,
-        args: Seq2SeqTrainingArguments, # noqa: ARG002
+        args: Seq2SeqTrainingArguments,  # noqa: ARG002
         state: TrainerState,
-        control: TrainerControl, # noqa: ARG002
-        **kwargs, # noqa: ARG002, ANN003
+        control: TrainerControl,  # noqa: ARG002
+        **kwargs,  # noqa: ARG002, ANN003
     ) -> None:
         """on_evaluate callback.
 
@@ -237,12 +242,12 @@ class EpochLoggerCallback(TrainerCallback):
 
 
 # Set up logging directory
-hprams_name = f"""lr{config["training_args"]["learning_rate"]}_bs{config["training_args"]["per_device_train_batch_size"]}""" # noqa: E501
+hprams_name = f"""lr{config["training_args"]["learning_rate"]}_bs{config["training_args"]["per_device_train_batch_size"]}"""  # noqa: E501
 log_dir = config["training_args"]["output_dir"] + f"/{hprams_name}"
 Path(log_dir).mkdir(parents=True, exist_ok=True)
 
 
-def create_compute_metrics_function(tokenizer: AutoTokenizer, log_dir: str)-> callable: # noqa: ARG001
+def create_compute_metrics_function(tokenizer: AutoTokenizer, log_dir: str) -> callable:  # noqa: ARG001
     """Create compute metrics function.
 
     Args:
