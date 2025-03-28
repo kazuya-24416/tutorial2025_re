@@ -178,4 +178,7 @@ event/ge11/
 event/ge11_json/
 event/output/
 genia_ner_output/
+genia_ner_output_lr1e5_bs32/
+genia_ner_output_lr5e5_bs32/
 
+llm_abci.sif
