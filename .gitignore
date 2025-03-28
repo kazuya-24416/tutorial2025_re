@@ -179,3 +179,4 @@ event/ge11_json/
 event/output/
 genia_ner_output/
 
+llm_abci.sif
