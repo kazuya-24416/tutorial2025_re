@@ -1,5 +1,5 @@
 # Model configuration
-model_name_or_path: "Qwen/Qwen2.5-0.5B-Instruct"
+model_name_or_path: "meta-llama/Llama-2-7b-hf"
 # model_name_or_path: "llm-jp/llm-jp-3-1.8b-instruct2"
 
 # Dataset configuration
@@ -30,11 +30,11 @@ quantization_config:
 
 # Training configuration
 training_args:
-  output_dir: "genia_ner_output"
+  output_dir: "genia_ner_output_lr1e4_bs32"
   eval_strategy: "epoch"
-  per_device_train_batch_size: 8
-  per_device_eval_batch_size: 10
-  learning_rate: 1.0e-5
+  per_device_train_batch_size: 32
+  per_device_eval_batch_size: 64
+  learning_rate: 1.0e-4
   num_train_epochs: 30.0
   lr_scheduler_type: "linear"
   warmup_ratio: 0.0
@@ -49,6 +49,7 @@ training_args:
   predict_with_generate: true
   generation_max_length: 768
   generation_num_beams: 4
+  load_best_model_at_end: true
   metric_for_best_model: "eval_f1"
   greater_is_better: true
 

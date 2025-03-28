@@ -278,7 +278,7 @@ trainer = Seq2SeqTrainer(
     eval_dataset=eval_dataset,
     data_collator=data_collator,
     compute_metrics=create_compute_metrics_function(tokenizer, log_dir),
-    processing_class=tokenizer,
+    tokenizer=tokenizer,
 )
 
 # Add custom callback
