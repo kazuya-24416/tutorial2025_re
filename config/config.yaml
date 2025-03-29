@@ -35,7 +35,7 @@ training_args:
   per_device_train_batch_size: 8
   per_device_eval_batch_size: 10
   learning_rate: 1.0e-5
-  num_train_epochs: 100.0
+  num_train_epochs: 5.0
   lr_scheduler_type: "linear"
   warmup_ratio: 0.0
   logging_strategy: "epoch"
@@ -61,7 +61,7 @@ early_stopping:
 
 # Wandb configuration
 wandb:
-  enabled: false  # Set to false to disable wandb during debugging
+  enabled: true  # Set to false to disable wandb during debugging
   project: "tutorial2025_re"  # Project name in wandb
   name: null  # Run name (will be auto-generated if null)
   group: null  # Group name for related runs
@@ -70,3 +70,15 @@ wandb:
 
 # Response template for data collator
 response_template: "### 指示:\n"
+
+hyperparameter_search:
+  enabled: true
+  n_trials: 10
+  backend: wandb
+  direction: maximize
+  metric_name: eval_f1
+  parameters:
+    method: random
+    learning_rate_min: 1e-6
+    learning_rate_max: 1e-4
+    batch_sizes: [2, 4, 8]
