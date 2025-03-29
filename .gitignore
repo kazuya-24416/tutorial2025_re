@@ -174,3 +174,5 @@ data/
 .ruff_cache
 outputs/
 wandb/
+event/
+genia_ner_output/
