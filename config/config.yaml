@@ -32,10 +32,10 @@ quantization_config:
 training_args:
   output_dir: "./outputs"
   eval_strategy: "epoch"
-  per_device_train_batch_size: 8
-  per_device_eval_batch_size: 10
+  per_device_train_batch_size: 1
+  per_device_eval_batch_size: 1
   learning_rate: 1.0e-5
-  num_train_epochs: 100.0
+  num_train_epochs: 3.0
   lr_scheduler_type: "linear"
   warmup_ratio: 0.0
   logging_strategy: "epoch"
@@ -51,13 +51,14 @@ training_args:
   generation_num_beams: 4
   metric_for_best_model: "eval_f1"
   greater_is_better: true
+  local_rank: 0
 
 # Early stopping configuration
 early_stopping:
-  enabled: true  # Set to true to enable early stopping
-  patience: 5  # Number of epochs to wait before early stopping
-  threshold: 0.0  # Threshold for early stopping
-  metric: "eval_f1"  # Use F1 score for early stopping
+  # enabled: true  # Set to true to enable early stopping
+  early_stopping_patience: 5  # Number of epochs to wait before early stopping
+  early_stopping_threshold: 0.0  # Threshold for early stopping
+  # metric_for_best_model: "eval_f1"  # Use F1 score for early stopping
 
 # Wandb configuration
 wandb:
