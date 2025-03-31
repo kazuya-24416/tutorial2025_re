@@ -40,10 +40,7 @@ def formatting_prompts_func(example: dict) -> list:
     output_texts = []
     for i in range(len(example["instruction"])):
         # Format the prompt in a way that's consistent with the model's expected format
-        text = f"""### Human:\n 以下の文章から関係トリプルを抽出してください。
-        関係トリプルは(エンティティ1, 関係, エンティティ2)の形式で出力してください。
-        {example["instruction"][i]}
-        \n\n{config["response_template"]} {example["output"][i]}"""
+        text = f"{example['instruction'][i]}\n\n{config['response_template']} {example['output'][i]}"  # noqa: E501
         output_texts.append(text)
     return output_texts
 
