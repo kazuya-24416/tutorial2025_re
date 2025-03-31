@@ -70,36 +70,17 @@ def preprocess_function_eval(examples: dict) -> dict:
         dict: A dictionary containing the preprocessed dataset with input_ids and labels
 
     """
-    # 入力部分のみ 指示部分とレスポンステンプレート
-    input_texts = []
-    # 全体 指示部分と出力部分- ラベル用
-    full_texts = []
-
+    concat_texts = []
     for i in range(len(examples["instruction"])):
-        # 入力部分（モデルに渡す）# noqa: RUF003
         instruction_text = (
             f"{examples['instruction'][i]}\n\n{config['response_template']}"
         )
-        input_texts.append(instruction_text)
+        concat_texts.append(instruction_text)
 
-        # 全体（ラベルとして使用）# noqa: RUF003
-        full_text = f"{examples['instruction'][i]}\n\n{config['response_template']} {examples['output'][i]}"  # noqa: E501
-        full_texts.append(full_text)
-
-    # 入力テキストをトークン化（モデルへの入力用）# noqa: RUF003
     model_inputs = tokenizer(
-        input_texts, padding="max_length", truncation=True, max_length=512
+        concat_texts, padding="max_length", truncation=True, max_length=512
     )
 
-    # 全体をトークン化（ラベル用）# noqa: RUF003
-    labels = tokenizer(
-        full_texts, padding="max_length", truncation=True, max_length=512
-    ).input_ids
-
-    # labelsを設定
-    model_inputs["labels"] = labels
-
-    # アテンションマスクの作成
     if "attention_mask" not in model_inputs:
         model_inputs["attention_mask"] = [
             [1] * len(input_ids) for input_ids in model_inputs["input_ids"]
