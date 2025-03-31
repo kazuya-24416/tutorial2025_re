@@ -1,13 +1,12 @@
 # Model configuration
 model_name_or_path: "Qwen/Qwen2.5-0.5B-Instruct"
-# model_name_or_path: "llm-jp/llm-jp-3-1.8b-instruct2"
 
 # Dataset configuration
 train_dataset_path: "data/debug_train.jsonl"
 eval_dataset_path: "data/debug_eval.jsonl"
+max_length: 512
 
 # LoRA configuration
-use_lora: true  # Set to false to disable LoRA
 lora_config:
   r: 16  # LoRA attention dimension
   lora_alpha: 32  # Alpha parameter for LoRA scaling
@@ -17,7 +16,6 @@ lora_config:
   target_modules: ["q_proj", "k_proj", "v_proj", "o_proj", "up_proj", "down_proj", "gate_proj"]  # Which modules to apply LoRA to
 
 # Quantization configuration
-use_quantization: true  # Set to false to disable quantization
 quantization_config:
   bits: 4  # Quantization precision: 4 or 8 bits
   load_in_4bit: true  # Will be set based on bits value
@@ -55,10 +53,8 @@ training_args:
 
 # Early stopping configuration
 early_stopping:
-  # enabled: true  # Set to true to enable early stopping
   early_stopping_patience: 5  # Number of epochs to wait before early stopping
   early_stopping_threshold: 0.0  # Threshold for early stopping
-  # metric_for_best_model: "eval_f1"  # Use F1 score for early stopping
 
 # Wandb configuration
 wandb:

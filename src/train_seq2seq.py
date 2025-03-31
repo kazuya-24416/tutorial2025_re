@@ -22,13 +22,6 @@ from utils import preprocess_function_eval, preprocess_function_train, read_json
 with Path("config/config.yaml").open() as file:
     config = yaml.safe_load(file)
 
-# Load dataset
-train_dataset = read_jsonlines(config["train_dataset_path"])
-train_dataset = Dataset.from_pandas(train_dataset)
-eval_dataset = read_jsonlines(config["eval_dataset_path"])
-eval_dataset = Dataset.from_pandas(eval_dataset)
-
-
 # Setup quantization configuration if enabled
 quantization_kwargs = {}
 bnb_config = BitsAndBytesConfig(**config["quantization_config"])
@@ -41,8 +34,9 @@ model = AutoModelForCausalLM.from_pretrained(
     device_map="auto",  # Automatically distribute model across available GPUs
     **quantization_kwargs,
 )
-tokenizer = AutoTokenizer.from_pretrained(config["model_name_or_path"])
 
+# Load tokenizer
+tokenizer = AutoTokenizer.from_pretrained(config["model_name_or_path"])
 # Set padding side to left for decoder-only models (as per warning)
 tokenizer.padding_side = "left"
 if tokenizer.pad_token is None:
@@ -57,6 +51,11 @@ model = prepare_model_for_kbit_training(model)
 model = get_peft_model(model, lora_config)
 model.print_trainable_parameters()  # Print trainable parameters info
 
+# Load dataset
+train_dataset = read_jsonlines(config["train_dataset_path"])
+train_dataset = Dataset.from_pandas(train_dataset)
+eval_dataset = read_jsonlines(config["eval_dataset_path"])
+eval_dataset = Dataset.from_pandas(eval_dataset)
 # Apply preprocessing to dataset
 train_dataset = train_dataset.map(
     preprocess_function_train, batched=True, remove_columns=train_dataset.column_names
@@ -71,13 +70,11 @@ data_collator = CustomDataCollatorForSeq2Seq(
     model=model,
     response_template=config["response_template"],
     padding="max_length",
-    max_length=512,
+    max_length=config["max_length"],
 )
 
 # Weights & Biases
-wandb.init(
-    # Weights & Biasesの設定を指定して下さい
-)
+wandb.init(**config["wandb"])
 
 # 評価スクリプトを呼び出して下さい
 compute_metrics = get_compute_metrics(tokenizer, config["training_args"]["output_dir"])

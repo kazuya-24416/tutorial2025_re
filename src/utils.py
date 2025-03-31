@@ -2,7 +2,6 @@ import json
 from pathlib import Path
 
 import pandas as pd
-import torch
 import yaml
 from transformers import AutoTokenizer
 
@@ -68,31 +67,31 @@ def preprocess_function_eval(examples: dict) -> dict:
         examples (dict): A dictionary containing the dataset.
 
     Returns:
-        dict: A dictionary containing the preprocessed dataset with input_ids and labels.
+        dict: A dictionary containing the preprocessed dataset with input_ids and labels
 
     """
-    # 入力部分のみ（指示部分とレスポンステンプレート）
+    # 入力部分のみ 指示部分とレスポンステンプレート
     input_texts = []
-    # 全体（指示部分と出力部分）- ラベル用
+    # 全体 指示部分と出力部分- ラベル用
     full_texts = []
 
     for i in range(len(examples["instruction"])):
-        # 入力部分（モデルに渡す）
+        # 入力部分（モデルに渡す）# noqa: RUF003
         instruction_text = (
             f"{examples['instruction'][i]}\n\n{config['response_template']}"
         )
         input_texts.append(instruction_text)
 
-        # 全体（ラベルとして使用）
-        full_text = f"{examples['instruction'][i]}\n\n{config['response_template']} {examples['output'][i]}"
+        # 全体（ラベルとして使用）# noqa: RUF003
+        full_text = f"{examples['instruction'][i]}\n\n{config['response_template']} {examples['output'][i]}"  # noqa: E501
         full_texts.append(full_text)
 
-    # 入力テキストをトークン化（モデルへの入力用）
+    # 入力テキストをトークン化（モデルへの入力用）# noqa: RUF003
     model_inputs = tokenizer(
         input_texts, padding="max_length", truncation=True, max_length=512
     )
 
-    # 全体をトークン化（ラベル用）
+    # 全体をトークン化（ラベル用）# noqa: RUF003
     labels = tokenizer(
         full_texts, padding="max_length", truncation=True, max_length=512
     ).input_ids
@@ -107,20 +106,3 @@ def preprocess_function_eval(examples: dict) -> dict:
         ]
 
     return model_inputs
-
-
-def preprocess_logits_for_metrics(
-    logits: torch.Tensor,
-    labels: torch.Tensor,  # noqa: ARG001
-) -> torch.Tensor:
-    """Original Trainer may have a memory leak.
-
-    Args:
-        logits (torch.Tensor): Logits from the model.
-        labels (torch.Tensor): True labels.
-
-    Returns:
-        torch.Tensor: Predicted IDs.
-
-    """
-    return torch.argmax(logits, dim=-1)
