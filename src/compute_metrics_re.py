@@ -140,6 +140,14 @@ def get_compute_metrics(tokenizer: AutoTokenizer, log_dir: str) -> Callable:
             references, skip_special_tokens=True, clean_up_tokenization_spaces=True
         )
         # Remove response template from decoded predictions
+        instructions = [
+            decoded_ref.split(config["response_template"])[0].strip()
+            for decoded_ref in decoded_refs
+        ]
+        decoded_refs = [
+            decoded_ref.split(config["response_template"])[1].strip()
+            for decoded_ref in decoded_refs
+        ]
         decoded_preds = [
             decoded_pred.split(config["response_template"])[1].strip()
             for decoded_pred in decoded_preds
@@ -149,14 +157,14 @@ def get_compute_metrics(tokenizer: AutoTokenizer, log_dir: str) -> Callable:
         with Path(log_dir + f"/preds_{time.time()}.json").open(
             "w", encoding="utf-8"
         ) as f:
-            for pred, ref in zip(
-                decoded_preds, decoded_refs, strict=False
+            for instruction, pred, ref in zip(
+                instructions, decoded_preds, decoded_refs, strict=False
             ):
                 json.dump(
-                    {"pred": pred, "ref": ref},
+                    {"instruction": instruction, "pred": pred, "ref": ref},
                     f,
                     ensure_ascii=False,
-                    indent=2,
+                    indent=3,
                 )
                 f.write("\n")
 

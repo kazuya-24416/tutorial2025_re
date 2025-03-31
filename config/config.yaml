@@ -58,12 +58,12 @@ early_stopping:
 
 # Wandb configuration
 wandb:
-  enabled: false  # Set to false to disable wandb during debugging
+  # enabled: false  # Set to false to disable wandb during debugging
   project: "tutorial2025_re"  # Project name in wandb
   name: null  # Run name (will be auto-generated if null)
   group: null  # Group name for related runs
   tags: []  # List of tags for the run
-  debug: false  # Set to true for wandb debug mode
+  # debug: false  # Set to true for wandb debug mode
 
 # Response template for data collator
 response_template: "### 指示:\n"

@@ -69,6 +69,12 @@ class CustomDataCollatorForSeq2Seq:
         batch["input_ids"] = torch.tensor(input_ids)
         batch["attention_mask"] = torch.tensor(attention_mask)
 
+        # eval data
+        if "labels" in features[0]:
+            labels = [feature["labels"] for feature in features]
+            batch["labels"] = torch.tensor(labels)
+            return batch
+
         # Create labels with -100 for instruction part
         labels = []
         for feature_input_ids in input_ids:

@@ -70,17 +70,36 @@ def preprocess_function_eval(examples: dict) -> dict:
         dict: A dictionary containing the preprocessed dataset with input_ids and labels
 
     """
-    concat_texts = []
+    # 指示部分
+    input_texts = []
+    # 全体
+    full_texts = []
+
     for i in range(len(examples["instruction"])):
+        # 指示部分
         instruction_text = (
             f"{examples['instruction'][i]}\n\n{config['response_template']}"
         )
-        concat_texts.append(instruction_text)
+        input_texts.append(instruction_text)
 
+        # 完全な参照テキスト
+        full_text = f"{examples['instruction'][i]}\n\n{config['response_template']} {examples['output'][i]}"  # noqa: E501
+        full_texts.append(full_text)
+
+    # 入力テキストをトークン化
     model_inputs = tokenizer(
-        concat_texts, padding="max_length", truncation=True, max_length=512
+        input_texts, padding="max_length", truncation=True, max_length=512
     )
 
+    # 完全なテキストをトークン化
+    full_inputs = tokenizer(
+        full_texts, padding="max_length", truncation=True, max_length=512
+    )
+
+    # labelsを設定
+    model_inputs["labels"] = full_inputs["input_ids"]
+
+    # アテンションマスクの作成
     if "attention_mask" not in model_inputs:
         model_inputs["attention_mask"] = [
             [1] * len(input_ids) for input_ids in model_inputs["input_ids"]
