@@ -3,6 +3,7 @@ from pathlib import Path
 import torch
 import yaml
 from datasets import Dataset
+from huggingface_hub import login
 from peft import LoraConfig, get_peft_model, prepare_model_for_kbit_training
 from transformers import (
     AutoModelForCausalLM,
@@ -17,6 +18,8 @@ import wandb
 from compute_metrics_re import get_compute_metrics
 from custom_collator import CustomDataCollatorForSeq2Seq
 from utils import preprocess_function_eval, preprocess_function_train, read_jsonlines
+
+login("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")
 
 # Load configuration from config.yaml
 with Path("config/config.yaml").open() as file:
@@ -36,12 +39,11 @@ model = AutoModelForCausalLM.from_pretrained(
 )
 
 # Load tokenizer
-tokenizer = AutoTokenizer.from_pretrained(config["model_name_or_path"])
-# Set padding side to left for decoder-only models (as per warning)
-tokenizer.padding_side = "left"
+tokenizer = AutoTokenizer.from_pretrained(
+    config["model_name_or_path"], padding_side="left"
+)
 if tokenizer.pad_token is None:
     tokenizer.pad_token = tokenizer.eos_token
-
 
 # Configure LoRA
 lora_config = LoraConfig(**config["lora_config"])
@@ -64,8 +66,8 @@ eval_dataset = eval_dataset.map(
     preprocess_function_eval, batched=True, remove_columns=eval_dataset.column_names
 )
 
-# Create custom data collator that masks instruction part
-data_collator = CustomDataCollatorForSeq2Seq(
+# Custom data collator
+custom_collator = CustomDataCollatorForSeq2Seq(
     tokenizer=tokenizer,
     model=model,
     response_template=config["response_template"],
@@ -78,6 +80,12 @@ wandb.init(**config["wandb"])
 
 # 評価スクリプトを呼び出して下さい
 compute_metrics = get_compute_metrics(tokenizer, config["training_args"]["output_dir"])
+# tokenizer.model_max_length = model.config.max_position_embeddings
+# model.config.vocab_size = (
+#     tokenizer.vocab_size
+# )  # モデルの語彙サイズをトークナイザーに合わせる
+print("Tokenizer vocab size:", tokenizer.vocab_size)
+print("Model vocab size:", model.config.vocab_size)
 
 # Create Seq2SeqTrainingArguments
 args = Seq2SeqTrainingArguments(**config["training_args"])
@@ -86,9 +94,9 @@ trainer = Seq2SeqTrainer(
     args=args,
     train_dataset=train_dataset,
     eval_dataset=eval_dataset,
-    data_collator=data_collator,
     compute_metrics=compute_metrics,
-    processing_class=tokenizer,
+    tokenizer=tokenizer,  # 誤字を修正
+    data_collator=custom_collator,  # 誤字を修正
 )
 
 # Add early stopping callback if enabled

@@ -8,11 +8,11 @@ import numpy as np
 import yaml
 from transformers import AutoTokenizer, EvalPrediction
 
-tokenizer = AutoTokenizer.from_pretrained("Qwen/Qwen2.5-0.5B-Instruct")
-
 # Load configuration from config.yaml
 with Path("config/config.yaml").open() as file:
     config = yaml.safe_load(file)
+
+tokenizer = AutoTokenizer.from_pretrained(config["model_name_or_path"])
 
 
 def get_compute_metrics(tokenizer: AutoTokenizer, log_dir: str) -> Callable:
@@ -21,6 +21,11 @@ def get_compute_metrics(tokenizer: AutoTokenizer, log_dir: str) -> Callable:
     def compute_metrics(eval_pred: EvalPrediction) -> dict[str, float]:
         # Get predictions and references
         predictions, references = eval_pred
+
+        decoded_preds = tokenizer.batch_decode(
+            predictions, skip_special_tokens=False, clean_up_tokenization_spaces=True
+        )
+        print(decoded_preds)
 
         predictions = np.where(predictions != -100, predictions, tokenizer.pad_token_id)
         references = np.where(references != -100, references, tokenizer.pad_token_id)
@@ -59,7 +64,7 @@ def get_compute_metrics(tokenizer: AutoTokenizer, log_dir: str) -> Callable:
                     ensure_ascii=False,
                     indent=3,
                 )
-                f.write("\n")
+                f.write(",\n")
 
         # Extract triples from predictions and references
         pred_triples_list = []

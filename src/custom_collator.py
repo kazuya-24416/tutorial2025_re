@@ -48,54 +48,121 @@ class CustomDataCollatorForSeq2Seq:
         batch = {}
 
         # Handling input_ids and attention_mask
-        input_ids = [feature["input_ids"] for feature in features]
-        attention_mask = [feature["attention_mask"] for feature in features]
-
-        # Pad input_ids and attention_mask
-        if self.padding == "max_length":
-            input_ids = [
-                ids + [self.tokenizer.pad_token_id] * (self.max_length - len(ids))
-                if len(ids) < self.max_length
-                else ids[: self.max_length]
-                for ids in input_ids
-            ]
-            attention_mask = [
-                mask + [0] * (self.max_length - len(mask))
-                if len(mask) < self.max_length
-                else mask[: self.max_length]
-                for mask in attention_mask
-            ]
+        input_ids: list[list[int]] = [feature["input_ids"] for feature in features]
+        attention_mask: list[list[int]] = [
+            feature["attention_mask"] for feature in features
+        ]
+        labels: list[list[int]] = [feature["labels"] for feature in features]
+        # # Pad input_ids and attention_mask
+        # if self.padding == "max_length":
+        #     input_ids = [
+        #         ids + [self.tokenizer.pad_token_id] * (self.max_length - len(ids))
+        #         if len(ids) < self.max_length
+        #         else ids[: self.max_length]
+        #         for ids in input_ids
+        #     ]
+        #     attention_mask = [
+        #         mask + [0] * (self.max_length - len(mask))
+        #         if len(mask) < self.max_length
+        #         else mask[: self.max_length]
+        #         for mask in attention_mask
+        #     ]
+        #     labels = [
+        #         ids + [self.tokenizer.pad_token_id] * (self.max_length - len(ids))
+        #         if len(ids) < self.max_length
+        #         else ids[: self.max_length]
+        #         for ids in labels
+        #     ]
+        #     input_ids = [
+        #         [self.tokenizer.pad_token_id] * (self.max_length - len(ids)) + ids
+        #         if len(ids) < self.max_length
+        #         else ids[-self.max_length:]
+        #         for ids in input_ids
+        #     ]
+        #     attention_mask = [
+        #         [0] * (self.max_length - len(mask)) + mask
+        #         if len(mask) < self.max_length
+        #         else mask[-self.max_length:]
+        #         for mask in attention_mask
+        #     ]
+        #     labels = [
+        #         [self.tokenizer.pad_token_id] * (self.max_length - len(ids)) + ids
+        #         if len(ids) < self.max_length
+        #         else ids[-self.max_length:]
+        #         for ids in labels
+        #     ]
 
         batch["input_ids"] = torch.tensor(input_ids)
         batch["attention_mask"] = torch.tensor(attention_mask)
-
-        # eval data
-        if "labels" in features[0]:
-            labels = [feature["labels"] for feature in features]
-            batch["labels"] = torch.tensor(labels)
-            return batch
-
-        # Create labels with -100 for instruction part
-        labels = []
-        for feature_input_ids in input_ids:
-            label = feature_input_ids.copy()
-
-            # Find the position of response_template in the sequence
-            response_start_idx = -1
-            for i in range(len(label) - len(self.response_token_ids) + 1):
-                if (
-                    label[i : i + len(self.response_token_ids)]
-                    == self.response_token_ids
-                ):
-                    response_start_idx = i
-                    break
-
-            # If response template is found, mask everything before it with -100
-            if response_start_idx != -1:
-                label[:response_start_idx] = [-100] * response_start_idx
-
-            labels.append(label)
-
         batch["labels"] = torch.tensor(labels)
-
+        # batchのサイズを確認
+        # print(f"Batch size: {len(input_ids)}")
+        # print(f"Input IDs shape: {len(input_ids[0])}")
+        # print(f"Attention mask shape: {len(attention_mask[0])}")
+        # print(f"Labels shape: {len(labels[0])}")
         return batch
+
+        # # eval data
+        # if "labels" in features[0]:
+        #     labels = [feature["labels"] for feature in features]
+        #     batch["labels"] = torch.tensor(labels)
+        #     # デバッグ用: デコード前に -100 を pad_token_id に置き換える
+        #     # debug_labels = [
+        #     #     [token if token != -100 else self.tokenizer.pad_token_id for token in seq]
+        #     #     for seq in labels
+        #     # ]
+        #     # decoded_labels = [
+        #     #     self.tokenizer.decode(
+        #     #         label, skip_special_tokens=True, clean_up_tokenization_spaces=True
+        #     #     )
+        #     #     for label in debug_labels
+        #     # ]
+        #     # print("Eval labels:")
+        #     # print(decoded_labels)
+        #     return batch
+
+        # # Create labels with -100 for instruction part and response template
+        # labels = []
+        # for feature_input_ids in input_ids:
+        #     label = feature_input_ids.copy()
+
+        #     # Find the position of response_template in the sequence
+        #     response_start_idx = -1
+        #     for i in range(len(label) - len(self.response_token_ids) + 1):
+        #         if (
+        #             label[i : i + len(self.response_token_ids)]
+        #             == self.response_token_ids
+        #         ):
+        #             response_start_idx = i
+        #             break
+
+        #     # If response template is found
+        #     if response_start_idx != -1:
+        #         # マスク指示部分（レスポンステンプレートの前）
+        #         label[:response_start_idx] = [-100] * response_start_idx
+
+        #         # マスクレスポンステンプレート自体も
+        #         response_end_idx = response_start_idx + len(self.response_token_ids)
+        #         label[response_start_idx:response_end_idx] = [-100] * len(
+        #             self.response_token_ids
+        #         )
+
+        #     labels.append(label)
+
+        # # デバッグ用: デコード前に -100 を pad_token_id に置き換える
+        # # debug_labels = [
+        # #     [token if token != -100 else self.tokenizer.pad_token_id for token in seq]
+        # #     for seq in labels
+        # # ]
+        # # decoded_labels = [
+        # #     self.tokenizer.decode(
+        # #         input_ids, skip_special_tokens=True, clean_up_tokenization_spaces=True
+        # #     )
+        # #     for input_ids in debug_labels
+        # # ]
+        # # print("Train labels:")
+        # # print(decoded_labels)
+
+        # batch["labels"] = torch.tensor(labels)
+
+        # return batch
