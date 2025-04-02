@@ -1,44 +1,26 @@
+from pathlib import Path
+
 import torch
-from transformers import AutoModelForCausalLM, AutoTokenizer
+import yaml
+from transformers import DataCollatorForSeq2Seq
+
+# Load configuration from config.yaml
+with Path("config/config.yaml").open() as file:
+    config = yaml.safe_load(file)
 
 
 # Define a custom data collator that masks the instruction part with -100
-class CustomDataCollatorForSeq2Seq:
+class CustomDataCollatorForSeq2Seq(DataCollatorForSeq2Seq):
     """Custom data collator for sequence-to-sequence tasks."""
 
-    def __init__(
-        self,
-        tokenizer: AutoTokenizer,
-        model: AutoModelForCausalLM,
-        response_template: str,
-        padding: str = "max_length",
-        max_length: int = 512,
-    ) -> None:
-        """Initialize the custom data collator.
-
-        Args:
-            tokenizer: The tokenizer to use for tokenization.
-            model: The model to use for tokenization.
-            response_template: The response template to use for tokenization.
-            padding: The padding to use for tokenization.
-            max_length: The maximum length to use for tokenization.
-
-        """
-        self.tokenizer = tokenizer
-        self.model = model
-        self.padding = padding
-        self.max_length = max_length
-        self.response_template = response_template
-        # Tokenize the response template to find its start in the sequence
-        self.response_token_ids = tokenizer.encode(
-            response_template, add_special_tokens=False
-        )
-
-    def __call__(self, features: list[dict[str, int]]) -> dict[str, torch.Tensor]:
+    def __call__(
+        self, features: list[dict[str, torch.Tensor]], return_tensors: str | None = None
+    ) -> dict[str, torch.Tensor]:
         """Tokenize and pad the input features.
 
         Args:
             features: List of features to be tokenized and padded.
+            return_tensors: The type of tensors to return.
 
         Returns:
             A dictionary of tokenized and padded features.
@@ -77,6 +59,9 @@ class CustomDataCollatorForSeq2Seq:
 
         # Create labels with -100 for instruction part
         labels = []
+        self.response_token_ids = self.tokenizer(
+            config["response_template"], add_special_tokens=False
+        )["input_ids"]
         for feature_input_ids in input_ids:
             label = feature_input_ids.copy()
 

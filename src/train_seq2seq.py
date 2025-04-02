@@ -8,14 +8,13 @@ from transformers import (
     AutoModelForCausalLM,
     AutoTokenizer,
     BitsAndBytesConfig,
-    EarlyStoppingCallback,
+    DataCollatorForSeq2Seq,
     Seq2SeqTrainer,
     Seq2SeqTrainingArguments,
 )
 
 import wandb
 from compute_metrics_re import get_compute_metrics
-from custom_collator import CustomDataCollatorForSeq2Seq
 from utils import preprocess_function_eval, preprocess_function_train, read_jsonlines
 
 # Load configuration from config.yaml
@@ -31,7 +30,7 @@ quantization_kwargs["quantization_config"] = bnb_config
 model = AutoModelForCausalLM.from_pretrained(
     config["model_name_or_path"],
     torch_dtype=torch.float16,  # Use float16 for better performance
-    device_map="auto",  # Automatically distribute model across available GPUs
+    # device_map="auto",  # Automatically distribute model across available GPUs
     **quantization_kwargs,
 )
 
@@ -65,10 +64,9 @@ eval_dataset = eval_dataset.map(
 )
 
 # Create custom data collator that masks instruction part
-data_collator = CustomDataCollatorForSeq2Seq(
+data_collator = DataCollatorForSeq2Seq(
     tokenizer=tokenizer,
     model=model,
-    response_template=config["response_template"],
     padding="max_length",
     max_length=config["max_length"],
 )
@@ -88,11 +86,8 @@ trainer = Seq2SeqTrainer(
     eval_dataset=eval_dataset,
     data_collator=data_collator,
     compute_metrics=compute_metrics,
-    processing_class=tokenizer,
+    tokenizer=tokenizer,
 )
-
-# Add early stopping callback if enabled
-trainer.add_callback(EarlyStoppingCallback(**config["early_stopping"]))
 
 # Start training
 trainer.train()
