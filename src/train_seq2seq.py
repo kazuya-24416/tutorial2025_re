@@ -30,7 +30,6 @@ quantization_kwargs["quantization_config"] = bnb_config
 model = AutoModelForCausalLM.from_pretrained(
     config["model_name_or_path"],
     torch_dtype=torch.float16,  # Use float16 for better performance
-    # device_map="auto",  # Automatically distribute model across available GPUs
     **quantization_kwargs,
 )
 
@@ -69,6 +68,7 @@ data_collator = DataCollatorForSeq2Seq(
     model=model,
     padding="max_length",
     max_length=config["max_length"],
+    label_pad_token_id=-100,
 )
 
 # Weights & Biases

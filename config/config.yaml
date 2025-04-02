@@ -4,7 +4,7 @@ model_name_or_path: "Qwen/Qwen2.5-0.5B-Instruct"
 # Dataset configuration
 train_dataset_path: "data/debug_train.jsonl"
 eval_dataset_path: "data/debug_eval.jsonl"
-max_length: 512
+max_length: 256
 
 # LoRA configuration
 lora_config:
@@ -39,13 +39,13 @@ training_args:
   logging_strategy: "epoch"
   save_strategy: "epoch"
   report_to: "all"
-  # max_seq_length: 512
+  # max_seq_length: 256
   gradient_accumulation_steps: 2
   gradient_checkpointing: true
   gradient_checkpointing_kwargs:
     use_reentrant: false
   predict_with_generate: true
-  generation_max_length: 768
+  generation_max_length: 512
   generation_num_beams: 4
   metric_for_best_model: "eval_f1"
   greater_is_better: true
@@ -67,4 +67,4 @@ wandb:
   # debug: false  # Set to true for wandb debug mode
 
 # Response template for data collator
-response_template: "### 指示:\n"
+response_template: "### 回答:\n"
