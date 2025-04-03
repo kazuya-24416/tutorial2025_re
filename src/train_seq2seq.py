@@ -33,14 +33,6 @@ model = AutoModelForCausalLM.from_pretrained(
     **quantization_kwargs,
 )
 
-# Load tokenizer
-tokenizer = AutoTokenizer.from_pretrained(config["model_name_or_path"])
-# Set padding side to left for decoder-only models (as per warning)
-tokenizer.padding_side = "left"
-if tokenizer.pad_token is None:
-    tokenizer.pad_token = tokenizer.eos_token
-
-
 # Configure LoRA
 lora_config = LoraConfig(**config["lora_config"])
 # Prepare model for k-bit training
@@ -48,6 +40,13 @@ model = prepare_model_for_kbit_training(model)
 # Apply LoRA to the model
 model = get_peft_model(model, lora_config)
 model.print_trainable_parameters()  # Print trainable parameters info
+
+# Load tokenizer
+tokenizer = AutoTokenizer.from_pretrained(config["model_name_or_path"])
+# Set padding side to left for decoder-only models (as per warning)
+tokenizer.padding_side = "left"
+if tokenizer.pad_token is None:
+    tokenizer.pad_token = tokenizer.eos_token
 
 # Load dataset
 train_dataset = read_jsonlines(config["train_dataset_path"])
