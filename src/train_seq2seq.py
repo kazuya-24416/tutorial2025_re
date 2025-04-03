@@ -3,6 +3,7 @@ from pathlib import Path
 import torch
 import yaml
 from datasets import Dataset
+from huggingface_hub import login
 from peft import LoraConfig, get_peft_model, prepare_model_for_kbit_training
 from transformers import (
     AutoModelForCausalLM,
@@ -16,6 +17,8 @@ from transformers import (
 import wandb
 from compute_metrics_re import get_compute_metrics
 from utils import preprocess_function_eval, preprocess_function_train, read_jsonlines
+
+login("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")
 
 # Load configuration from config.yaml
 with Path("config/config.yaml").open() as file:
@@ -34,12 +37,11 @@ model = AutoModelForCausalLM.from_pretrained(
 )
 
 # Load tokenizer
-tokenizer = AutoTokenizer.from_pretrained(config["model_name_or_path"])
-# Set padding side to left for decoder-only models (as per warning)
-tokenizer.padding_side = "left"
+tokenizer = AutoTokenizer.from_pretrained(
+    config["model_name_or_path"], padding_side="left"
+)
 if tokenizer.pad_token is None:
     tokenizer.pad_token = tokenizer.eos_token
-
 
 # Configure LoRA
 lora_config = LoraConfig(**config["lora_config"])
@@ -76,6 +78,12 @@ wandb.init(**config["wandb"])
 
 # 評価スクリプトを呼び出して下さい
 compute_metrics = get_compute_metrics(tokenizer, config["training_args"]["output_dir"])
+# tokenizer.model_max_length = model.config.max_position_embeddings
+# model.config.vocab_size = (
+#     tokenizer.vocab_size
+# )  # モデルの語彙サイズをトークナイザーに合わせる
+print("Tokenizer vocab size:", tokenizer.vocab_size)
+print("Model vocab size:", model.config.vocab_size)
 
 # Create Seq2SeqTrainingArguments
 args = Seq2SeqTrainingArguments(**config["training_args"])
@@ -84,9 +92,9 @@ trainer = Seq2SeqTrainer(
     args=args,
     train_dataset=train_dataset,
     eval_dataset=eval_dataset,
-    data_collator=data_collator,
     compute_metrics=compute_metrics,
     tokenizer=tokenizer,
+    data_collator=data_collator,
 )
 
 # Start training
