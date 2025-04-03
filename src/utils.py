@@ -91,11 +91,16 @@ def preprocess_function_eval(examples: dict) -> dict:
     """
     processed_data = {"input_ids": [], "attention_mask": [], "labels": []}
 
-    for instruction in examples["instruction"]:
+    for instruction, output in zip(examples["instruction"], examples["output"]):
         prompt = f"{instruction}{config['response_template']}"
         input_ids = tokenizer(prompt, add_special_tokens=False)["input_ids"]
         attention_mask = tokenizer(prompt, add_special_tokens=False)["attention_mask"]
         labels = input_ids.copy()
+
+        # outputをトークナイズしてlabelsを更新
+        tokenized_output = tokenizer(output, add_special_tokens=False)
+        output_ids = tokenized_output["input_ids"]
+        labels.extend(output_ids)
 
         processed_data["input_ids"].append(input_ids)
         processed_data["attention_mask"].append(attention_mask)
